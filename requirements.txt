@@ -1,0 +1,12 @@
+# Core data science
+numpy
+pandas
+scipy
+
+# Machine learning
+scikit-learn
+
+# Visualization
+matplotlib
+seaborn
+
