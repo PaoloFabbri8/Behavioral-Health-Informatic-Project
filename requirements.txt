@@ -2,9 +2,12 @@
 numpy
 pandas
 scipy
+pyarrow
+cvxpy
 
 # Machine learning
 scikit-learn
+shap
 
 # Visualization
 matplotlib
