@@ -1,0 +1,21 @@
+notes.md
+
+# Python
+__pycache__/
+*.py[cod]
+
+# Virtual environments
+.venv/
+venv/
+bhi-env/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# OS
+.DS_Store
+
+# Project-generated outputs
+data/final/
+data/raw/processed/
+results/
