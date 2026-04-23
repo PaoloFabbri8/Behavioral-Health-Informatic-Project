@@ -8,16 +8,14 @@
 
 - [Introduction](#introduction)
 - [System Architecture](#system-architecture)
-- [Core Components](#core-components)
-- [Data Processing Pipeline](#data-processing-pipeline)
-- [ML Components](#ml-components)
-- [Dashboard and Visualization](#dashboard-and-visualization)
-- [Data Insights](#data-insights)
-- [Getting Started](#getting-started)
-- [Performance and Results](#performance-and-results)
-- [Limitations and Future Work](#limitations-and-future-work)
-- [Team and Contributors](#team-and-contributors)
+- [Data Preparation](#data-preparation)
+- [Feature Engineering](#feature-engineering)
+- [ML Model](#ml-model)
+- [Feature Importance](#feature-importance)
 - [Conclusion](#conclusion)
+- [Limitations and Future Work](#limitations-and-future-work)
+- [Getting Started](#getting-started)
+- [Team and Contributors](#team-and-contributors)
 - [References](#references)
 
 ## Introduction
@@ -44,74 +42,54 @@ The system follows a modular pipeline architecture organized into six layers:
 ![System Architecture](report/figures/System_architecture.png)
 
 
+## Data Preparation
 
-## Core Components
+The first stage integrates three sources: smartwatch test recordings, questionnaire responses, and patient demographics. During exploratory checks, data quality was generally high. We also analyzed cohort composition and confirmed class imbalance, with PD as the majority class, which motivated a careful evaluation strategy.
 
-- Data ingestion and preprocessing utilities
-- Patient-level feature engineering from repeated sessions
-- Leakage-aware split and feature selection pipeline
-- Random Forest tuning and evaluation framework
-- Fair-comparison and interpretability analyses
+Before modeling, we examined demographic and clinical distributions (age, gender, weight, condition prevalence) and tested group differences. This step provided context for the learning problem and helped justify age-aware splitting. In the no-demographics objective, demographics are merged only to enable age-aware stratification and are then removed before feature selection and model training.
 
-## Data Processing Pipeline
+At this stage, the target was defined as a binary label (PD vs non-PD), with patient-level consistency preserved across all merged tables.
 
-The pipeline starts from modality-specific loading and preprocessing, then aggregates observations at patient level. In the no-demographics objective, demographic variables are merged only to support age-aware stratification in the train/test split. After the split is finalized, demographics are removed from training and test feature matrices, and are not used for feature selection, model fitting, or final evaluation.
+## Feature Engineering
 
-Feature preparation is fit on training data only to avoid leakage.
+Feature engineering was designed as a multi-stage, leakage-safe pipeline.
 
-## ML Components
+To answer the research question, three setups were created: sensor-only (A), questionnaire-only (B), and combined (C). A training-only feature selection workflow was then applied: missingness filtering, median imputation, high-correlation removal, and ranking with a composite ANOVA F-test plus Mutual Information score. The top features were retained per setup, and all fitted transformations were transferred to test data without re-estimation.
 
-The main model is Random Forest, tuned with RandomizedSearchCV using 5-fold cross-validation and ROC-AUC as optimization metric. Three setup-specific models are trained:
-- Setup A: sensors only
-- Setup B: questionnaires only
-- Setup C: combined modalities
+## ML Model
 
-Additional analyses:
-- Top-k fair comparison between A and B under the same feature budget
-- Cross-model benchmark (Logistic Regression, SVM-RBF, Random Forest, Gradient Boosting)
+Random Forest was used as the primary classifier because it performs well on structured biomedical data, captures non-linear interactions, and remains interpretable through feature-importance analysis. Model development was executed separately for each setup (A, B, C).
 
-## Dashboard and Visualization
+For each setup, hyperparameters were tuned on training data only with RandomizedSearchCV (5-fold cross-validation, ROC-AUC scoring). The best configuration was then used to train the final model on the full training split, and evaluation was performed on the held-out test split using Accuracy, F1-score, ROC-AUC, precision, recall, and balanced accuracy.
 
-The project provides report-oriented visual outputs generated from notebooks:
-- multi-metric comparison plots
-- ROC curve visualizations
-- permutation feature importance plots
-- model sensitivity and fair-comparison charts
+![Multi-metric comparison across setups](report/figures/multi_metric_comparison.png)
 
-All generated figures are saved in the report figures directory.
+## Feature Importance
 
-## Data Insights
+After training, permutation importance was computed on the test set to identify the most discriminative features for each setup. This approach measures the drop in model performance when each feature is randomly shuffled, providing a model-agnostic view of variable relevance that is not biased by split structure.
 
-Main findings show that questionnaire-only and sensor-only setups are close on several metrics, while the combined setup performs best overall. Feature importance in the sensor-only setup indicates that cross-test motor variability is one of the strongest discriminative signals between PD and non-PD groups.
-
-## Performance and Results
-
-Test-set performance with tuned Random Forest:
-
-| Setup | Accuracy | ROC-AUC | F1 |
-|---|---:|---:|---:|
-| A - Sensors only | 0.70 | 0.70 | 0.77 |
-| B - Questionnaire only | 0.73 | 0.82 | 0.76 |
-| C - All modalities | 0.82 | 0.89 | 0.83 |
-
-Interpretation:
-- A and B are comparable overall.
-- B has stronger threshold-independent discrimination (ROC-AUC).
-- A is slightly stronger at the selected decision threshold (F1).
-- C consistently outperforms both unimodal setups, confirming complementarity.
-
-## Limitations and Future Work
-
-- External validation across additional cohorts and devices is still needed.
-- Calibration and threshold optimization for deployment should be expanded.
-- Larger and more diverse populations are required for stronger generalization.
-- Longitudinal modeling could improve progression-aware predictions.
+![Top 5 Features - Sensor Only (Setup A)](report/figures/top_5_features_A_sensor_only.png)
 
 ## Conclusion
 
 This study shows that smartwatch-derived sensor features provide predictive performance broadly comparable to questionnaire-based features for PD detection. While questionnaire data achieved higher ROC-AUC and sensor data achieved a slightly better F1-score, the strongest result is that combining both modalities produced the best performance across metrics. This confirms that questionnaires and wearables capture complementary information: symptom-specific self-report on one side, and continuous motor behavior on the other.
 
 Feature-importance analysis further supports this interpretation, highlighting cross-test movement variability as a key discriminative signal in the sensor-only setup. Overall, the project indicates that smart wearables are not only supportive tools, but promising predictive instruments for early screening and prevention-oriented monitoring, especially when integrated with short targeted questionnaires.
+
+## Limitations and Future Work
+
+### Current Limitations
+
+- **Gender imbalance**: The PADS dataset contains a significantly higher proportion of male PD patients than female, which may cause the model to learn patterns more representative of male motor behavior. This limits generalizability to female populations, which are already underrepresented in Parkinson's research.
+- **Cross-sectional design**: All observations are collected at a single point in time. Without repeated measurements over months or years, the pipeline cannot model disease progression or early-stage trajectories — it can only discriminate already-diagnosed PD from non-PD at the moment of recording.
+- **Single-dataset dependency**: The entire pipeline was developed and evaluated on one publicly available dataset. Differences in device models, recording protocols, or clinical conventions across institutions may reduce transferability to real-world settings.
+- **Calibration and threshold optimization**: The decision threshold was not optimized for any specific clinical cost function (e.g., minimizing false negatives in screening), which limits deployment readiness.
+
+### Future Directions
+
+- **Deep learning architectures**: Replacing hand-crafted features with end-to-end models such as 1D-CNNs or Transformer-based architectures directly on raw inertial signals could capture richer temporal patterns and reduce dependence on manual feature engineering.
+- **Panel data and longitudinal modeling**: Collecting repeated measurements from the same individuals over time would enable the study of trajectory-based features — potentially revealing which behavioral and motor variables are predictive of future PD onset, shifting the goal from detection to prevention-oriented early warning.
+- **External validation**: Testing the pipeline on independent cohorts recorded with different devices and clinical protocols is essential to confirm generalizability before any clinical translation.
 
 ## Getting Started
 
